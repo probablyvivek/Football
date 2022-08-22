@@ -82,23 +82,15 @@ if __name__ == "__main__":
     for team in teams:
         print(team.name, team.skill)
 
-    #simulate 100000 time
-    simulate_league(teams)
+    #simulate 100000 time 
+    for i in range(1):
+        simulate_league(teams)
 
     sorted_teams = sorted(teams, key=lambda t: t.points, reverse=True)
 
     print("=" * 108)
     print(
-        "| {:<25} | {:^4} | {:^3} | {:^3} | {:^3} | {:^4} | {:^4} | {:^4} | {:^6} |".format("CLUB", "MP", "W", "D",
-                                                                                            "L", "GF",
-                                                                                            "GA",
-                                                                                            "GD", "PTS"))
+        "| {:<25} | {:^4} | {:^3} | {:^3} | {:^3} | {:^4} | {:^4} | {:^4} | {:^6} |".format("CLUB", "MP", "W", "D", "L", "GF", "GA","GD", "PTS"))
     print("-" * 108)                                                                                        
     for team in sorted_teams:
-        print("| {:<25} | {:^4} | {:^3} | {:^3} | {:^3} | {:^4} | {:^4} | {:^4} | {:^6} |".format(team.name, team.mp,
-                                                                                                team.wins,
-                                                                                                team.draws,
-                                                                                                team.losses,
-                                                                                                team.gf,
-                                                                                                team.ga, team.gdiff,
-                                                                                                team.points))
+        print("| {:<25} | {:^4} | {:^3} | {:^3} | {:^3} | {:^4} | {:^4} | {:^4} | {:^6} |".format(team.name, team.mp, team.wins,team.draws,team.losses, team.gf, team.ga, team.gdiff,team.points))
