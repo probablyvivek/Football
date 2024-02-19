@@ -3,6 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 
+
 # Headers for the request
 headers = {
     'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.106 Safari/537.36'
@@ -105,39 +106,42 @@ def create_charts(df):
 
 # Streamlit interface to include the charts
 st.title('Premier League Transfer Data')
-season = st.text_input('Enter the season (e.g., 2022):')
+years = list(range(2000, 2025))
+
+# Create a select box for the user to choose a season
+season = st.selectbox('Select the season:', years)
 
 if st.button('Fetch Transfer Data'):
-    if season.isdigit():
-        with st.spinner('Fetching data...'):
-            df = scrape_transfer_data(season)
+    # No need to check if season is a digit since it's selected from a predefined list
+    with st.spinner('Fetching data...'):
+        df = scrape_transfer_data(str(season))
             
             # Clean the fee column to prepare data for analysis
-            df = clean_fee_column(df)
+        df = clean_fee_column(df)
             
             # Clean the player names to ensure data consistency
-            df = clean_player_names(df)
+        df = clean_player_names(df)
 
             # Sort the DataFrame for better readability and analysis
-            df = df.sort_values(by=['Team', 'Transfer Direction'], ascending=[True, True])
+        df = df.sort_values(by=['Team', 'Transfer Direction'], ascending=[True, True])
             
             # Reset the index to start from 1 for display purposes
-            df.reset_index(drop=True, inplace=True)
+        df.reset_index(drop=True, inplace=True)
             
             # Create and display charts based on the cleaned data
-            create_charts(df)
+        create_charts(df)
             
             # Display the cleaned and sorted transfer data
-            st.write("### Transfer Data")
-            st.dataframe(df)  # Using st.dataframe for better formatting
+        st.write("### Transfer Data")
+        st.dataframe(df)  # Using st.dataframe for better formatting
             
             # Provide the option to download the cleaned data
-            csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button(
+        csv = df.to_csv(index=False).encode('utf-8')
+        st.download_button(
                 label='Download Data as CSV',
                 data=csv,
                 file_name='transfer_data.csv',
                 mime='text/csv'
             )
-    else:
-        st.error('Please enter a valid season.')
+else:
+    st.error('Please click the button to fetch the transfer data.')
