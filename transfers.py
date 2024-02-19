@@ -121,12 +121,6 @@ if st.button('Fetch Transfer Data'):
             
             # Clean the player names to ensure data consistency
         df = clean_player_names(df)
-
-            # Sort the DataFrame for better readability and analysis
-        df = df.sort_values(by=['Team', 'Transfer Direction'], ascending=[True, True])
-            
-            # Reset the index to start from 1 for display purposes
-        df.reset_index(drop=True, inplace=True)
             
             # Create and display charts based on the cleaned data
         create_charts(df)
