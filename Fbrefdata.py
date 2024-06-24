@@ -16,7 +16,7 @@ urls = [
     'https://fbref.com/en/squads/cff3d9bb/Chelsea-Stats'
 ]
 
-directory = "./Programming/Snippets/Football_Data"
+directory = "./Football/Football_Data"
 if not os.path.exists(directory):
     os.makedirs(directory)
 
@@ -26,3 +26,8 @@ for url in urls:
     # Save each team's data to a separate CSV file
     file_path = os.path.join(directory, f"{team_name}.xlsx")
     data.to_excel(file_path, index=False)
+
+# Combine all data into a single DataFrame
+combined_data = pd.concat([pd.read_excel(os.path.join(directory, f)) for f in os.listdir(directory)], ignore_index=True)
+
+
