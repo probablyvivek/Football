@@ -3,33 +3,30 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 
-
 # Headers for the request
 headers = {
     'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.106 Safari/537.36'
 }
 
-# Function to extract player data
 def extract_player_data(team_name, team_div, transfer_type, all_player_data):
     transfer_table = team_div.find_all('table')
 
     if transfer_table and len(transfer_table) >= 2:
-        table_headers = [th.text.strip() for th in transfer_table[transfer_type].find('thead').find_all('th')]
         rows = transfer_table[transfer_type].find('tbody').find_all('tr')
 
         for row in rows:
-            player_data = [team_name, 'In' if transfer_type == 0 else 'Out']
+            player_data = [team_name]
             for td in row.find_all('td'):
                 data = td.text.strip()
                 player_data.append(data)
 
             all_player_data.append(player_data)
 
-# Function to scrape transfer data
-def scrape_transfer_data(season):
-    all_player_data = []
+def scrape_transfer_data():
+    transfers_in = []
+    transfers_out = []
     
-    base_url = f"https://www.transfermarkt.co.uk/premier-league/transfers/wettbewerb/GB1/plus/?saison_id={season}&s_w=&leihe=1&intern=0&intern=1"
+    base_url = "https://www.transfermarkt.co.uk/premier-league/transfers/wettbewerb/GB1/plus/?saison_id=2024&s_w=&leihe=1&intern=0&intern=1"
     pageTree = requests.get(base_url, headers=headers)
     soup = BeautifulSoup(pageTree.content, 'html.parser')
     
@@ -41,101 +38,104 @@ def scrape_transfer_data(season):
         team_div = team_anchor.find_parent('div', class_='box') if team_anchor else None
 
         if team_div:
-            extract_player_data(team_name, team_div, transfer_type=0, all_player_data=all_player_data)
-            extract_player_data(team_name, team_div, transfer_type=1, all_player_data=all_player_data)
+            extract_player_data(team_name, team_div, transfer_type=0, all_player_data=transfers_in)
+            extract_player_data(team_name, team_div, transfer_type=1, all_player_data=transfers_out)
 
-    # Define the columns for the DataFrame
-    columns = ['Team', 'Transfer Direction', 'Player', 'Age', 'Nationality', 'Position', 'Short Position', 'Market Value', 'Left Team', 'Left Team Flag', 'Fee']
+    return transfers_in, transfers_out, teams_list
 
-    # Create the DataFrame with the specified columns
-    df = pd.DataFrame(all_player_data, columns=columns)
+def clean_data(df):
+    # Rename columns
+    df = df.rename(columns={
+        'Market Value': 'Current Team',
+        'Current Team': 'Market Value',
+        'Joined': 'Joined From'
+    })
 
-    # Drop the 'Nationality' column and 'Left Team' as it is not needed
-    df = df.drop(columns=['Nationality', 'Left Team'])
+    # Remove unnecessary columns
+    df = df.drop(columns=['Contract Expires'])
 
-    # Rename the 'Left Team Flag' column to 'Left Team'
-    df = df.rename(columns={'Left Team Flag': 'Left Team'})
+    # Clean market value
+    df['Market Value'] = df['Market Value'].str.replace('€', '').str.replace('m', '')
+    df['Market Value'] = pd.to_numeric(df['Market Value'], errors='coerce')
+
+    # Clean fee
+    df['Fee'] = df['Fee'].str.replace('€', '').str.replace('m', '')
+    df['Fee'] = pd.to_numeric(df['Fee'], errors='coerce')
 
     return df
 
-def clean_player_names(df):
-    # First, attempt to insert a space between full names and their abbreviations or duplicates
-    df['Player'] = df['Player'].str.replace(r'([a-z])([A-Z])', r'\1 \2', regex=True)
+def create_summary(team, df_in, df_out):
+    total_spent = df_in[df_in['Team'] == team]['Fee'].sum()
+    total_received = df_out[df_out['Team'] == team]['Fee'].sum()
+    players_in = len(df_in[df_in['Team'] == team])
+    players_out = len(df_out[df_out['Team'] == team])
     
-    # Second, remove common abbreviation patterns, like "K. Havertz" following the full name
-    df['Player'] = df['Player'].str.replace(r'\b[A-Z]\. [A-Z][a-z]+', '', regex=True)
-    
-    # Optional: Remove any trailing spaces left after cleaning
-    df['Player'] = df['Player'].str.strip()
-    
-    return df
+    summary = f"""
+    Transfer Summary for {team} (2024/2025 Season):
+    - Players In: {players_in}
+    - Players Out: {players_out}
+    - Total Spent: €{total_spent:.2f}m
+    - Total Received: €{total_received:.2f}m
+    - Net Spend: €{total_spent - total_received:.2f}m
+    """
+    return summary
 
+st.title('Premier League Transfer Data 2024/2025')
 
+if 'data_loaded' not in st.session_state:
+    st.session_state.data_loaded = False
 
-def clean_fee_column(df):
-    # Ensure the 'Fee' column is of type string
-    df['Fee'] = df['Fee'].astype(str)
-    
-    df['Fee'] = (
-        df['Fee']
-        .str.replace('€', '', regex=False)  # Remove the Euro symbol
-        .str.replace('m', 'e6', regex=False)  # Convert 'm' to 'e6' (for million)
-        .str.replace('Loan fee:', '', regex=False)  # Remove 'Loan fee:' text
-        .str.replace(',', '.', regex=False)  # Convert comma to dot for decimals
-        .str.extract(r'(\d+\.?\d*)')  # Extract the numeric part
-        .fillna(0)  # Fill NaN with 0
-        .astype(float)  # Convert the column to float
-    )
-    return df
+if not st.session_state.data_loaded:
+    if st.button('Fetch Transfer Data for 2024/2025 Season'):
+        with st.spinner('Fetching data...'):
+            transfers_in, transfers_out, teams_list = scrape_transfer_data()
 
+            # Create DataFrames
+            columns = ['Team', 'Player', 'Age', 'Position', 'Market Value', 'Current Team', 'Joined', 'Contract Expires', 'Fee']
+            st.session_state.df_in = pd.DataFrame(transfers_in, columns=columns)
+            st.session_state.df_out = pd.DataFrame(transfers_out, columns=columns)
 
-def create_charts(df):
-    # Clean the fee column
-    df = clean_fee_column(df)
-    transfer_counts = df.groupby(['Team', 'Transfer Direction']).size().unstack().fillna(0)
-    # Aggregating the total fees for incoming and outgoing transfers
-    total_fees = df.groupby(['Team', 'Transfer Direction'])['Fee'].sum().unstack().fillna(0)
-    
-    
-    # Plotting the data
-    st.write("### Number of Players Transferred In and Out by Team")
-    st.bar_chart(transfer_counts)
-    
-    st.write("### Total Fees for Players Transferred In and Out by Team (in €)")
-    st.bar_chart(total_fees)
+            # Clean the data
+            st.session_state.df_in = clean_data(st.session_state.df_in)
+            st.session_state.df_out = clean_data(st.session_state.df_out)
 
-# Streamlit interface to include the charts
-st.title('Premier League Transfer Data')
-years = list(range(2000, 2025))
+            st.session_state.teams_list = teams_list
+            st.session_state.data_loaded = True
 
-# Create a select box for the user to choose a season
-season = st.selectbox('Select the season:', years)
+if st.session_state.data_loaded:
+    selected_team = st.selectbox('Select Team:', ['All Teams'] + st.session_state.teams_list)
 
-if st.button('Fetch Transfer Data'):
-    # No need to check if season is a digit since it's selected from a predefined list
-    with st.spinner('Fetching data...'):
-        df = scrape_transfer_data(str(season))
-            
-            # Clean the fee column to prepare data for analysis
-        df = clean_fee_column(df)
-            
-            # Clean the player names to ensure data consistency
-        df = clean_player_names(df)
-            
-            # Create and display charts based on the cleaned data
-        create_charts(df)
-            
-            # Display the cleaned and sorted transfer data
-        st.write("### Transfer Data")
-        st.dataframe(df)  # Using st.dataframe for better formatting
-            
-            # Provide the option to download the cleaned data
-        csv = df.to_csv(index=False).encode('utf-8')
+    if selected_team != 'All Teams':
+        df_in_display = st.session_state.df_in[st.session_state.df_in['Team'] == selected_team]
+        df_out_display = st.session_state.df_out[st.session_state.df_out['Team'] == selected_team]
+        st.text(create_summary(selected_team, st.session_state.df_in, st.session_state.df_out))
+    else:
+        df_in_display = st.session_state.df_in
+        df_out_display = st.session_state.df_out
+
+    st.subheader('Transfers In')
+    st.dataframe(df_in_display)
+
+    st.subheader('Transfers Out')
+    st.dataframe(df_out_display)
+
+    csv_in = df_in_display.to_csv(index=False).encode('utf-8')
+    csv_out = df_out_display.to_csv(index=False).encode('utf-8')
+
+    col1, col2 = st.columns(2)
+    with col1:
         st.download_button(
-                label='Download Data as CSV',
-                data=csv,
-                file_name='transfer_data.csv',
-                mime='text/csv'
-            )
+            label='Download Transfers In as CSV',
+            data=csv_in,
+            file_name=f'transfers_in_2024_2025_{selected_team}.csv',
+            mime='text/csv'
+        )
+    with col2:
+        st.download_button(
+            label='Download Transfers Out as CSV',
+            data=csv_out,
+            file_name=f'transfers_out_2024_2025_{selected_team}.csv',
+            mime='text/csv'
+        )
 else:
-    st.error('Please click the button to fetch the transfer data.')
+    st.info('Click the button to fetch the transfer data for the 2024/2025 season.')
